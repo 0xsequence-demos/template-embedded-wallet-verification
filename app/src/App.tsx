@@ -1,15 +1,27 @@
 import { useState, useEffect } from 'react'
 import './App.css'
-
+import logo from './Sequence-Icon-Square.png'
 import { CredentialResponse, GoogleLogin } from '@react-oauth/google';
 import embeddedWallet from './SequenceEmbeddedWallet.ts'
+import { useTheme } from '@0xsequence/design-system';
+import { Button, Text, Card } from '@0xsequence/design-system';
 
 function App() {
+
+  const {setTheme} = useTheme()
+
+  setTheme('light')
+
   const [nonce, setNonce] = useState<any>(null)
   const [sessionHash, setSessionHash] = useState("")
   const [walletAddress, setWalletAddress] = useState<string>('')
   const [walletVerified, setWalletVerified] = useState(false)
   const [walletRegistered, setWalletRegistered] = useState(false)
+  const [isToggled, setIsToggled] = useState(false);
+
+  const handleToggle = () => {
+    setIsToggled(!isToggled);
+  };
 
   useEffect(() => {
     const handler = async () => {
@@ -25,16 +37,16 @@ function App() {
 
   useEffect(() => {
 
-  }, [sessionHash, walletAddress, walletRegistered, walletVerified, nonce ])
+  }, [sessionHash, walletAddress, walletRegistered, walletVerified, nonce, isToggled])
 
   useEffect(() => {
-    fetch('http://localhost:3001/check/' + walletAddress, {
+    fetch('http://localhost:3001/check/' + walletAddress + '/' + isToggled, {
           method: 'GET',
       })
       .then(response => response.json()) // Parsing the JSON response
-      .then(data => {setNonce(Object.values(data)[0]);setWalletRegistered(true)}) // Logging the response data
+      .then(data => {console.log(data);setNonce(Object.values(data)[0]);if(JSON.stringify(data) !== JSON.stringify({})) {setWalletRegistered(true)}else setWalletRegistered(false)}) // Logging the response data
       .catch(error => console.error('Error:', error));
-  }, [walletAddress])
+  }, [walletAddress, walletRegistered, isToggled])
 
   useEffect(() => {
     setTimeout(async () => {
@@ -64,19 +76,23 @@ function App() {
         },
         body: JSON.stringify({
             walletAddress: walletAddress,
+            isExpiry: isToggled
         })
     })
     .then(response => response.json()) // Parsing the JSON response
-    .then(data => console.log(data)) // Logging the response data
+    .then(data => {
+      if(JSON.stringify(data) !== JSON.stringify({})) {
+        setWalletRegistered(true)}
+        console.log(data)
+        setNonce((Object.values(data)[0] as any).nonce)
+      }
+    ) // Logging the response data
     .catch(error => console.error('Error:', error)); // Handling errors
   }
 
   const verify = async () => {
     const authProof = await embeddedWallet.sessionAuthProof({ nonce }) 
 
-    console.log(authProof)
-
-    
     fetch('http://localhost:3001/verify', {
         method: 'POST',
         headers: {
@@ -88,7 +104,8 @@ function App() {
             signature: authProof.data.signature,
             sessionID: authProof.data.sessionId,
             chainId: authProof.data.network,
-            messageProof: authProof.data.message
+            messageProof: authProof.data.message,
+            isExpiry: isToggled
         })
     })
     .then(response => response.json()) // Parsing the JSON response
@@ -96,22 +113,54 @@ function App() {
     .catch(error => console.error('Error:', error)); // Handling errors
   }
 
+  useEffect(() => {
+    if(isToggled){
+      setWalletRegistered(false)
+      setWalletVerified(false)
+    } else {
+      setWalletVerified(false)
+    }
+  }, [isToggled])
   return (
-    <>
-      <div className='App'>
+    <>  
+      <div style={{marginLeft: '35px'}}>
+        <img width={'100px'} src={logo} />
         <br/>
-        {
-          walletAddress == '' && <GoogleLogin 
-            nonce={sessionHash}
-            key={sessionHash}
-            onSuccess={handleGoogleLogin} shape="circle" width={230} />
-        }
-        <br/> 
-        {walletAddress != '' && <button onClick={() => register()}>register</button> }
-        {walletAddress != '' && <button disabled={!walletRegistered} onClick={() => verify()}>verify</button> }
+          <Text>Sequence Embedded Wallet <br/>Proof Verification</Text>
+          <br/>
+          <br/>
+          {
+            walletAddress == '' && <GoogleLogin 
+              nonce={sessionHash}
+              key={sessionHash}
+              onSuccess={handleGoogleLogin} shape="circle" width={230} />
+          }
       </div>
-      {walletAddress != '' && <p>is wallet registered: {walletRegistered.toString()}</p>}
-      {walletAddress != '' && <p>is wallet verified: {walletVerified.toString()}</p>}
+      <br/> 
+      <br/>
+      {walletAddress != '' && <Card>
+        <div className='App'>
+          <div className="center-container">
+            <>
+              <p>optional: toggle for 30s proof expiry</p>
+              <br/>
+              <input 
+              type="checkbox"
+              id="switch"
+              checked={isToggled}
+              onChange={handleToggle}
+              />
+              <label htmlFor="switch"></label>
+            </>
+          </div>
+        </div>
+        <br/>
+        <br/>
+        <Button onClick={() => register()} label="register"/> 
+        <Button disabled={!walletRegistered}  onClick={() => verify()} label="verify"/> 
+        <p>is wallet registered: {walletRegistered.toString()}</p>
+        <p>is wallet verified: {walletVerified.toString()}</p>
+      </Card> }
     </>
   )
 }

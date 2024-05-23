@@ -4,7 +4,8 @@ import App from './App.tsx'
 import './index.css'
 import { useSessionHash } from "./useSessionHash.ts";
 import { GoogleOAuthProvider } from '@react-oauth/google'
-
+import {ThemeProvider} from '@0xsequence/design-system'
+import "@0xsequence/design-system/styles.css"
 function Dapp(){
   const { sessionHash } = useSessionHash()
   return(
@@ -15,6 +16,8 @@ function Dapp(){
 }
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <Dapp/>
+    <ThemeProvider>
+      <Dapp/>
+    </ThemeProvider>
   </React.StrictMode>,
 )
