@@ -28,7 +28,7 @@ function App() {
   }, [sessionHash, walletAddress, walletRegistered, walletVerified, nonce ])
 
   useEffect(() => {
-    fetch('http://localhost:3000/check/' + walletAddress, {
+    fetch('http://localhost:3001/check/' + walletAddress, {
           method: 'GET',
       })
       .then(response => response.json()) // Parsing the JSON response
@@ -57,7 +57,7 @@ function App() {
   }
 
   const register = async () => {
-    fetch('http://localhost:3000/register', {
+    fetch('http://localhost:3001/register', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -76,7 +76,8 @@ function App() {
 
     console.log(authProof)
 
-    fetch('http://localhost:3000/verify', {
+    
+    fetch('http://localhost:3001/verify', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -86,7 +87,8 @@ function App() {
             nonce: nonce,
             signature: authProof.data.signature,
             sessionID: authProof.data.sessionId,
-            chainId: authProof.data.network
+            chainId: authProof.data.network,
+            messageProof: authProof.data.message
         })
     })
     .then(response => response.json()) // Parsing the JSON response

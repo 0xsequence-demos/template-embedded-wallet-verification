@@ -7,12 +7,14 @@ import cors from 'cors'
 //@ts-ignore
 import Corestore from 'corestore'
 
+import crypto from 'crypto';
+
 const app = express()
-const PORT = 3000;
+const PORT = 3001;
 
 app.use(express.json());
 app.use(cors({
-    origin: 'http://localhost:5173',  // Allow only this origin to access your server
+    origin: 'http://localhost:3000',  // Allow only this origin to access your server
 }));
 
 const store = new Corestore('./my-storage')
@@ -49,9 +51,24 @@ app.post('/register', async (req: any,res: any) => {
 })
 
 app.post('/verify', async (req, res) => {
-    const { chainId, walletAddress, signature, sessionID, nonce } = req.body
+    const { chainId, walletAddress, messageProof, signature, sessionID, nonce } = req.body
+    const data = `SessionAuthProof ${sessionID} ${walletAddress} ${nonce}`;
+
+    const hexString = messageProof;
+
+    console.log(signature)
+    // Remove the '0x' prefix if present
+    const cleanHexString = hexString.startsWith('0x') ? hexString.substring(2) : hexString;
+
+    // Convert the hex string to a Buffer
+    const buffer = Buffer.from(cleanHexString, 'hex');
+
+    // Convert the Buffer to a UTF-8 string
+    const decodedString = buffer.toString('utf8');
+
     const message = `SessionAuthProof ${sessionID} ${walletAddress} ${nonce}`
-    console.log(message)
+
+    console.log(`SessionAuthProof ${sessionID} ${walletAddress} ${nonce}`)
     
     const api = new sequence.api.SequenceAPIClient("https://api.sequence.app");
     const { isValid } = await api.isValidMessageSignature({
