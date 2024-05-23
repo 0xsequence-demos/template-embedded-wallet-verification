@@ -18,5 +18,5 @@ verify the ownership of an embedded wallet using a backend nonce storing server,
 ### verify signature
 ![verify signature](verify_signature.png)
 
-### verify signature with time expiry
+### (optional) verify signature with time expiry 
 ![verify signature time expiry](verify_signature_time_expiry.png)
