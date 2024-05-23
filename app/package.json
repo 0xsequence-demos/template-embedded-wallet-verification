@@ -10,9 +10,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@0xsequence/design-system": "^1.7.1",
     "@0xsequence/waas": "^1.9.27",
     "@react-oauth/google": "^0.12.1",
     "ethers": "5.7.2",
+    "framer-motion": "^11.2.6",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },

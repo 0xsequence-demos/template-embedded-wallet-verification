@@ -8,50 +8,89 @@ import cors from 'cors'
 import Corestore from 'corestore'
 
 const app = express()
-const PORT = 3000;
+const PORT = 3001;
 
 app.use(express.json());
 app.use(cors({
-    origin: 'http://localhost:5173',  // Allow only this origin to access your server
+    origin: 'http://localhost:3000',  // Allow only this origin to access your server
 }));
 
 const store = new Corestore('./my-storage')
 const nonces = store.get({ name: 'off-chain-db', valueEncoding: 'json'})
 
-app.post('/register', async (req: any,res: any) => {
-    const {walletAddress } = req.body
+function generateFutureTimestampBySeconds(seconds: any) {
+    // Create a new Date object for the current time
+    const now = new Date();
+    
+    // Calculate the future time in milliseconds by adding the specified number of seconds
+    const futureTimeInMilliseconds = now.getTime() + seconds * 1000;
+    
+    // Return the future time in milliseconds
+    return futureTimeInMilliseconds;
+}
 
-    let walletFound = false
-    let foundWallet = null
-    const fullStream = nonces.createReadStream()
-    for await (const nonceObj of fullStream) {
-        const wallet = Object.keys(nonceObj)[0]
-        if(walletAddress == wallet){
-            walletFound = true
-            foundWallet = nonceObj
-            break;
-        }
+function isSessionActive(sessionString: any) {
+    // Regular expression to extract the expiryTime from the string
+    const regex = /SessionAuthProof \S+ \S+ (\d+)/;
+    const match = sessionString.match(regex);
+  
+    if (!match) {
+      console.error('Invalid session string format');
+      return false;
     }
-    if(walletFound) {
-        res.send(foundWallet)
+  
+    // Extract the expiryTime (assuming it's a Unix timestamp)
+    const expiryTime = parseInt(match[1], 10);
+
+    // Get the current time in Unix timestamp format
+    const currentTime = Date.now();
+  
+    return currentTime < expiryTime;
+  }
+
+app.post('/register', async (req: any,res: any) => {
+    const {walletAddress, isExpiry } = req.body
+    if(isExpiry){
+        const time = generateFutureTimestampBySeconds(30)
+        const walletNonceAddition: any = {}
+        walletNonceAddition[walletAddress]= {isExpiry: true, nonce: time.toString()}
+    
+        await nonces.append(walletNonceAddition)
+        res.send(walletNonceAddition)
     } else {
         const randomNonce = ethers.BigNumber.from(
             ethers.utils.hexlify(ethers.utils.randomBytes(20))
         )
     
         const walletNonceAddition: any = {}
-        walletNonceAddition[walletAddress]= randomNonce.toString()
-    
+        walletNonceAddition[walletAddress]= {isExpiry: false, nonce: randomNonce.toString()}
+
         await nonces.append(walletNonceAddition)
         res.send(walletNonceAddition)
     }
-
 })
 
 app.post('/verify', async (req, res) => {
-    const { chainId, walletAddress, signature, sessionID, nonce } = req.body
-    const message = `SessionAuthProof ${sessionID} ${walletAddress} ${nonce}`
-    console.log(message)
+    const { chainId, walletAddress, messageProof, signature, sessionID, nonce, isExpiry } = req.body
+    const data = `SessionAuthProof ${sessionID} ${walletAddress} ${nonce}`;
+
+    const hexString = messageProof;
+
+    // Remove the '0x' prefix if present
+    const cleanHexString = hexString.startsWith('0x') ? hexString.substring(2) : hexString;
+
+    // Convert the hex string to a Buffer
+    const buffer = Buffer.from(cleanHexString, 'hex');
+
+    // Convert the Buffer to a UTF-8 string
+    const decodedString = buffer.toString('utf8');
+
+    const message = decodedString
+
+    let active = true;
+    if(isExpiry){
+        active = isSessionActive(message)
+    }
     
     const api = new sequence.api.SequenceAPIClient("https://api.sequence.app");
     const { isValid } = await api.isValidMessageSignature({
@@ -61,25 +100,39 @@ app.post('/verify', async (req, res) => {
         signature,
     });
 
-    res.send({valid: isValid})
+    res.send({valid: isValid&&active})
 })
 
-app.get('/check/:wallet', async (req, res) => {
-    let walletFound = false
-    const obj: any = {}
+app.get('/check/:wallet/:isExpiry', async (req, res) => {
+    const noncesArray = [];
+    const fullStream = nonces.createReadStream();
 
-    const fullStream = nonces.createReadStream()
+    // Read all data into memory (be careful with large datasets)
     for await (const nonceObj of fullStream) {
-        const wallet = Object.keys(nonceObj)[0]
-        const nonce = Object.values(nonceObj)[0]
-        if(req.params.wallet == wallet){
-            walletFound = true
-            obj[req.params.wallet] = nonce
+        noncesArray.push(nonceObj);
+    }
+
+    // Reverse the array
+    noncesArray.reverse();
+
+    // Process in reverse order
+    let walletFound = false;
+    const obj: any = {};
+
+    for (const nonceObj of noncesArray) {
+        const wallet = Object.keys(nonceObj)[0];
+        const nonce = (Object.values(nonceObj)[0] as any).nonce;
+        const isExpiryBoolean = (Object.values(nonceObj)[0] as any).isExpiry;
+
+        if (req.params.wallet == wallet && req.params.isExpiry == String(isExpiryBoolean)) {
+            walletFound = true;
+            obj[req.params.wallet] = nonce;
             break;
         }
     }
-    res.send(obj)
-})
+
+    res.send(obj);
+});
 
 app.listen(PORT, () => {
     console.log(`listening on port: ${PORT}`)
